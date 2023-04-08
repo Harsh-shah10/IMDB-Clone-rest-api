@@ -40,22 +40,6 @@ class WatchList(models.Model):
     def __str__(self):
         return self.title
 
-class Review(models.Model):
-    # name = models.CharField(max_length=100)
-    rating = models.PositiveIntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
-    description = models.CharField(max_length=200, null=True, blank=True, default=None)
-    created = models.DateTimeField(auto_now_add=True)
-    update = models.DateTimeField(auto_now=True)
-    active = models.BooleanField(default=True)
-
-    watchlist = models.ForeignKey(WatchList, on_delete=models.CASCADE, related_name='all_review')
-
-    class Meta:
-        db_table = 'all_review'
-        
-    def __str__(self):
-        return 'Rating : ' + str(self.rating) + ' : ' + self.watchlist.title
-     
 class TicketSale(models.Model):
     name = models.CharField(max_length=50)
     movie = models.ForeignKey(WatchList, on_delete=models.CASCADE)
@@ -68,3 +52,19 @@ class TicketSale(models.Model):
         
     def __str__(self):
         return self.name 
+    
+class Review(models.Model):
+    name = models.CharField(max_length=100)
+    rating = models.PositiveIntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
+    description = models.CharField(max_length=200, null=True, blank=True, default=None)
+    created = models.DateTimeField(auto_now_add=True)
+    update = models.DateTimeField(auto_now=True)
+    active = models.BooleanField(default=True)
+    watchlist = models.ForeignKey(WatchList, on_delete=models.CASCADE, related_name='all_review')
+
+    class Meta:
+        db_table = 'all_review'
+        
+    def __str__(self):
+        return 'Rating : ' + str(self.rating) + ' : ' + self.watchlist.title
+     

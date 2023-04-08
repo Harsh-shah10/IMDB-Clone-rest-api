@@ -2,7 +2,7 @@ from django.shortcuts import render
 from rest_framework.decorators import api_view
 
 # import models
-from .models import WatchList, StreamingPlatform, Genre, Review
+from .models import WatchList, StreamingPlatform, Genre, Review, TicketSale
 from django.http import JsonResponse
 import json
 
@@ -295,13 +295,35 @@ def ticket_sales(request):
 #display a list of all movies with their average rating, including movies that haven't been rated yet
 @api_view(['GET'])
 def rating_analysis(request):
-    movie_ratings = WatchList.objects.annotate(avg_rating=Avg('all_review__rating')).values('title', 'avg_rating')
+    # movie_ratings = WatchList.objects.annotate(avg_rating=Avg('all_review__rating')).values('title', 'avg_rating')
+    # results = []
+    # for movie in movie_ratings:
+    #     result = {
+    #         'movie_title': movie['title'],
+    #         'avg_rating': movie['avg_rating'] or 'Not rated yet'
+    #     }
+    #     results.append(result)
 
+    # return JsonResponse({'results': results})
+
+    query = WatchList.objects.raw('''SELECT watch_list.id,
+        watch_list.title, 
+        AVG(all_review.rating) AS avg_rating, 
+        GROUP_CONCAT(all_review.name, ',') AS reviewers 
+        FROM 
+        watch_list 
+        LEFT JOIN all_review ON watch_list.id = all_review.watchlist_id 
+        GROUP BY 
+        watch_list.id;
+        ''')
+    
     results = []
-    for movie in movie_ratings:
+    for row in query:
+        reviewers = row.reviewers.split(',') if row.reviewers else 0
         result = {
-            'movie_title': movie['title'],
-            'avg_rating': movie['avg_rating'] or 'Not rated yet'
+            'movie_title': row.title,
+            'avg_rating': row.avg_rating or 'Not rated yet',
+            'reviewers': reviewers
         }
         results.append(result)
 
@@ -310,40 +332,46 @@ def rating_analysis(request):
 
 # api to add reviews to movies
 @api_view(['POST'])
-def post_movie_reviews(request, watchlist_id):
-    try:
-        watchlist = WatchList.objects.get(id=int(watchlist_id))
-    except WatchList.DoesNotExist:
-        return JsonResponse({'error': 'Invalid watchlist id'}, status=400)
-
+def post_movie_reviews(request):
     received_json_data = json.loads(request.body)
     if len(received_json_data) == 0:
         return JsonResponse({'status': 'fail', 'message': 'Payload cannot be Empty', 'status_code': 400})
 
     # Check if all the required keys are present in the received JSON data
-    required_keys = ['rating', 'description']
+    required_keys = ['watchlist_id','name','rating','description']
     missing_keys = [key for key in required_keys if key not in received_json_data]
     if missing_keys:
         missing_keys_str = ', '.join(missing_keys)
         return JsonResponse({'status': 'fail', 'message': f'Missing required keys: {missing_keys_str}', 'status_code': 400})
 
-    rating = received_json_data['rating']
+    name = received_json_data['name']
+    rating = int(received_json_data['rating'])
     description = received_json_data['description']
-    if not rating or not description:
-        return JsonResponse({'error': 'Rating and description are required'}, status=400)
+    watchlist_id = received_json_data['watchlist_id']
 
+    watchlist = WatchList.objects.get(id=watchlist_id)
     review = Review.objects.create(
-        rating=rating,
-        description=description,
-        watchlist=watchlist,
-    )
-    
+            name=name,
+            rating=rating,
+            description=description,
+            watchlist=watchlist
+        )
+
+    # Save the new review object to the database
+    review.save()
+
+    # Create the response data
     response_data = {
         'message': 'Review added successfully',
         'data': {
             'R_id': review.id,
-            'rating': review.rating
+            'name': review.name,
+            'rating': review.rating,
+            'description': review.description,
+            'created': review.created,
+            'update': review.update,
+            'active': review.active,
+            'movie_title': watchlist.title
         }
     }
-    return Response(response_data, status=status.HTTP_201_CREATED)
-    
+    return JsonResponse(response_data, status=status.HTTP_201_CREATED)
