@@ -27,7 +27,7 @@ class StreamingPlatform(models.Model):
 class WatchList(models.Model):
     title = models.CharField(max_length=100)
     storyline = models.CharField(max_length=300)
-    year = models.IntegerField()
+    year = models.IntegerField(null=True)
     active = models.BooleanField(default=True)
     created = models.DateTimeField(auto_now_add=True)
     genres = models.ManyToManyField(Genre)
@@ -64,3 +64,4 @@ class TicketSale(models.Model):
 
     class Meta:
         db_table = 'ticket_sales'
+        

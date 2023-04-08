@@ -167,6 +167,30 @@ def stream_list(request):
                 'message': "No Steaming platform's found", 'status_code': 404}
         return Response(data, status=status.HTTP_404_NOT_FOUND)
 
+@api_view(['GET', 'DELETE', 'PUT'])
+def stream_details(request, pk):
+    if request.method == 'GET':
+        try:
+            movie = WatchList.objects.get(id=int(pk))
+        except WatchList.DoesNotExist:
+            return JsonResponse({'status': 'fail', 'message': 'No movie exists with the following Movie-ID', 'status_code': 400})
+
+        data = {'status': 'success', 'id': movie.id, 'title': movie.title,
+                'storyline': movie.storyline, 'active': movie.active, 'Platform': movie.platform.name, 'status_code': 200}
+        return JsonResponse(data)
+
+    if request.method == 'DELETE':
+        try:
+            movie = WatchList.objects.get(id=int(pk))
+        except WatchList.DoesNotExist:
+            data = {'status': 'fail',
+                    'message': 'No movie exists with the following Movie-ID', 'status_code': 404}
+            return Response(data, status=status.HTTP_404_NOT_FOUND)
+
+        data = {'status': 'success', 'id': movie.id, 'title': movie.title,
+                'message': 'Movie Entry has been deleted successfully', 'status_code': 200}
+        movie.delete()
+        return JsonResponse(data)
 
 # #to get all the movies with their corresponding genre names
 # @api_view(['GET'])
