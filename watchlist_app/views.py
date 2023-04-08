@@ -2,13 +2,13 @@ from django.shortcuts import render
 from rest_framework.decorators import api_view
 
 # import models
-from .models import WatchList, StreamingPlatform, Genre
+from .models import WatchList, StreamingPlatform, Genre, Review
 from django.http import JsonResponse
 import json
 
 from rest_framework import status
 from rest_framework.response import Response
-from django.db.models import F
+from django.db.models import F, Count, Sum, Avg
 
 # viewing movies list
 @api_view(['GET'])
@@ -281,13 +281,69 @@ def genre_list(request):
     return JsonResponse(genres)
 
 
-# # get the no of ticekts sold
-# @api_view(['GET'])
-# def box_office_collection(request):
-#     queryset = StreamingPlatform.objects.raw("SELECT watchlist.title AS movie_name, streaming_platform.name AS platform_name, COUNT(ticket.id) AS tickets_sold FROM  watchlist LEFT JOIN streaming_platform ON watchlist.platform_id = streaming_platform.id LEFT JOIN ticket ON watchlist.id = ticket.watchlist_id GROUP BY watchlist.id, streaming_platform.id ORDER BY watchlist.title")
-#     print(str(queryset))
+# get the no of ticekts sold
+@api_view(['GET'])
+def ticket_sales(request):
+    #queryset = WatchList.objects.raw("SELECT watch_list.id, watch_list.title AS movie_title,ticket_sales.amount AS amount, COUNT(ticket_sales.id) AS tickets_sold FROM watch_list INNER JOIN ticket_sales ON watch_list.id = ticket_sales.movie_id GROUP BY watch_list.title")
+    queryset = WatchList.objects.annotate(
+        tickets_sold=Count('ticketsale'),
+        total_amount=Sum('ticketsale__amount')
+    ).values('title', 'tickets_sold', 'total_amount')
+    results = list(queryset)
+    return JsonResponse({'results': results})
+
+#display a list of all movies with their average rating, including movies that haven't been rated yet
+@api_view(['GET'])
+def rating_analysis(request):
+    movie_ratings = WatchList.objects.annotate(avg_rating=Avg('all_review__rating')).values('title', 'avg_rating')
+
+    results = []
+    for movie in movie_ratings:
+        result = {
+            'movie_title': movie['title'],
+            'avg_rating': movie['avg_rating'] or 'Not rated yet'
+        }
+        results.append(result)
+
+    return JsonResponse({'results': results})
+
+
+# api to add reviews to movies
+@api_view(['POST'])
+def post_movie_reviews(request, watchlist_id):
+    try:
+        watchlist = WatchList.objects.get(id=int(watchlist_id))
+    except WatchList.DoesNotExist:
+        return JsonResponse({'error': 'Invalid watchlist id'}, status=400)
+
+    received_json_data = json.loads(request.body)
+    if len(received_json_data) == 0:
+        return JsonResponse({'status': 'fail', 'message': 'Payload cannot be Empty', 'status_code': 400})
+
+    # Check if all the required keys are present in the received JSON data
+    required_keys = ['rating', 'description']
+    missing_keys = [key for key in required_keys if key not in received_json_data]
+    if missing_keys:
+        missing_keys_str = ', '.join(missing_keys)
+        return JsonResponse({'status': 'fail', 'message': f'Missing required keys: {missing_keys_str}', 'status_code': 400})
+
+    rating = received_json_data['rating']
+    description = received_json_data['description']
+    if not rating or not description:
+        return JsonResponse({'error': 'Rating and description are required'}, status=400)
+
+    review = Review.objects.create(
+        rating=rating,
+        description=description,
+        watchlist=watchlist,
+    )
     
-# #display a list of all movies with their average rating, including movies that haven't been rated yet, using a right join
-# def rating_analysis(request):
-#     queryset = StreamingPlatform.objects.raw("SELECT movies.title, AVG(ratings.rating) AS average_rating FROM movies RIGHT JOIN ratings ON movies.id = ratings.movie_id GROUP BY movies.title")
-#     print(str(queryset))
+    response_data = {
+        'message': 'Review added successfully',
+        'data': {
+            'R_id': review.id,
+            'rating': review.rating
+        }
+    }
+    return Response(response_data, status=status.HTTP_201_CREATED)
+    

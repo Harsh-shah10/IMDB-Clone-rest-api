@@ -41,6 +41,7 @@ class WatchList(models.Model):
         return self.title
 
 class Review(models.Model):
+    # name = models.CharField(max_length=100)
     rating = models.PositiveIntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
     description = models.CharField(max_length=200, null=True, blank=True, default=None)
     created = models.DateTimeField(auto_now_add=True)
@@ -65,3 +66,5 @@ class TicketSale(models.Model):
     class Meta:
         db_table = 'ticket_sales'
         
+    def __str__(self):
+        return self.name 
