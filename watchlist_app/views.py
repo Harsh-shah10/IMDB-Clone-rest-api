@@ -2,13 +2,13 @@ from django.shortcuts import render
 from rest_framework.decorators import api_view
 
 # import models
-from .models import WatchList, StreamingPlatform
+from .models import WatchList, StreamingPlatform, Genre
 from django.http import JsonResponse
 import json
 
 from rest_framework import status
 from rest_framework.response import Response
-
+from django.db.models import F
 
 # viewing movies list
 @api_view(['GET'])
@@ -125,13 +125,31 @@ def add_movie(request):
     else:
         return JsonResponse({'status': 'fail', 'message': "Pass 'Pid' key", 'status_code': 400})
 
+
+    if 'year' in received_json_data:
+        year = int(received_json_data['year'])
+    else:
+        return JsonResponse({'status': 'fail', 'message': "Pass 'year' key", 'status_code': 400})
+
+    if 'genres' in received_json_data:
+        genre_ids = received_json_data['genres']
+        try:
+            genres = Genre.objects.filter(id__in=genre_ids)
+        except Genre.DoesNotExist:
+            return JsonResponse({'status': 'fail', 'message': 'Invalid genre id(s)', 'status_code': 400})
+    else:
+        return JsonResponse({'status': 'fail', 'message': "Pass 'genres' key", 'status_code': 400})
+
+
     movie_obj = WatchList()
     movie_obj.title = title
     if storyline:
         movie_obj.storyline = storyline
     movie_obj.active = active
     movie_obj.platform_id = Pid
+    movie_obj.year = year
     movie_obj.save()
+    movie_obj.genres.set(genres)
 
     data = {'status': 'success',
             'message': 'Movie Added successfully', 'status_code': 200}
@@ -192,14 +210,77 @@ def stream_details(request, pk):
         movie.delete()
         return JsonResponse(data)
 
-# #to get all the movies with their corresponding genre names
-# @api_view(['GET'])
-# def genre_details(request):
-#     # inner join
-#     queryset = StreamingPlatform.objects.raw("SELECT movie.title, movie.description, movie.year, movie.rating, genre.genre_name FROM movie INNER JOIN genre ON movie.genre_id = genre.id")
-#     print(str(queryset))
+@api_view(['POST'])
+def AddStreamingPlatform(request):
+    received_json_data = json.loads(request.body)
+    if len(received_json_data) == 0:
+        return JsonResponse({'status': 'fail', 'message': 'Payload cannot be Empty', 'status_code': 400})
+
+    # Check if all the required keys are present in the received JSON data
+    required_keys = ['name', 'about', 'website']
+    missing_keys = [key for key in required_keys if key not in received_json_data]
+    if missing_keys:
+        missing_keys_str = ', '.join(missing_keys)
+        return JsonResponse({'status': 'fail', 'message': f'Missing required keys: {missing_keys_str}', 'status_code': 400})
+
+    name = received_json_data['name']
+    about = received_json_data['about']
+    website = received_json_data['website']
+    if name and about and website:
+        streaming_platform = StreamingPlatform(
+                name=name,
+                about=about,
+                website=website
+            )
+        streaming_platform.save()  
+        
+        response_data = {
+            'message': 'Streaming platform added successfully',
+            'data': {
+                'id': streaming_platform.id,
+                'name': streaming_platform.name,
+                'about': streaming_platform.about,
+                'website': streaming_platform.website
+            }
+        }
+
+        return Response(response_data, status=status.HTTP_201_CREATED)
+    else:
+        response_data = {
+            'error': 'Incomplete data provided'
+        }
+        return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['GET'])
+def view_streaming_platforms(request):
+    platforms = StreamingPlatform.objects.all()
+    platforms_data = [{'Id': platform.id,'name': platform.name, 'about': platform.about, 'website': platform.website} for platform in platforms]
+    return JsonResponse({'status': 'success', 'data': platforms_data})
+
+
+#to get all the movies with their corresponding genre names
+@api_view(['GET'])
+def genre_list(request):
+    # inner join
+    results = WatchList.objects.annotate(genre_name=F('genres__name')).values('genre_name', 'id', 'title', 'storyline', 'year').order_by('genre_name')
+
+    genres = {}
+    for result in results:
+        genre_name = result['genre_name']
+        movie = {
+            "id": result['id'],
+            "title": result['title'],
+            "storyline": result['storyline'],
+            "year": result['year']
+        }
+        if genre_name in genres:
+            genres[genre_name].append(movie)
+        else:
+            genres[genre_name] = [movie]
     
-    
+    return JsonResponse(genres)
+
+
 # # get the no of ticekts sold
 # @api_view(['GET'])
 # def box_office_collection(request):

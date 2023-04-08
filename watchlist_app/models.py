@@ -27,7 +27,7 @@ class StreamingPlatform(models.Model):
 class WatchList(models.Model):
     title = models.CharField(max_length=100)
     storyline = models.CharField(max_length=300)
-    year = models.IntegerField(null=True)
+    year = models.IntegerField(null=False)
     active = models.BooleanField(default=True)
     created = models.DateTimeField(auto_now_add=True)
     genres = models.ManyToManyField(Genre)
